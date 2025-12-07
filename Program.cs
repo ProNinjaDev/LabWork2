@@ -48,7 +48,7 @@ namespace LabWork
 
             // АНАЛИЗ СХЕМЫ
             Console.WriteLine("\n--- Шаги 4-5: Формирование модели пространства состояний ---");
-            var parser = new MatrixMParser(allComponents, mMatrix, rowLabels, columnLabels);
+            var parser = new MatrixMParser(allComponents, mMatrix, rowLabels, columnLabels, treeBranches);
             var (coefficientMatrix, variableOrder) = parser.Parse();
 
             var analyzer = new CircuitAnalyzer(allComponents, coefficientMatrix, variableOrder);
@@ -148,10 +148,10 @@ namespace LabWork
 
                 // 2. Ввод типа
                 string type;
-                var validTypes = new List<string> { "R", "C", "L", "E", "J" };
+                var validTypes = new List<string> { "R", "C", "L", "E", "J", "G" };
                 while (true)
                 {
-                    Console.Write("Введите тип компонента (R, C, L, E, J): ");
+                    Console.Write("Введите тип компонента (R, C, L, E, J, G): ");
                     type = Console.ReadLine().ToUpper();
                     if (validTypes.Contains(type)) break;
                     Console.WriteLine("Неверный тип");
@@ -161,7 +161,16 @@ namespace LabWork
                 double value;
                 while (true)
                 {
-                    Console.Write($"Введите значение для {name} (Ом, Ф, Гн, В, А): ");
+                    string prompt;
+                    if (type == "G")
+                    {
+                        prompt = $"Введите крутизну S для {name}: ";
+                    }
+                    else
+                    {
+                        prompt = $"Введите значение для {name} (Ом, Ф, Гн, В, А): ";
+                    }
+                    Console.Write(prompt);
                     if (double.TryParse(Console.ReadLine(), out value)) break;
                     Console.WriteLine("Введите корректное число");
                 }
@@ -181,13 +190,43 @@ namespace LabWork
                     Console.WriteLine("Введите целое число, не совпадающее с первым узлом");
                 }
 
+
+                int? cNode1 = null;
+                int? cNode2 = null;
+
+                if (type == "G")
+                {
+                    Console.WriteLine($"Настройка управления для {name}");
+                    while (true)
+                    {
+                        Console.Write("Введите номер узла 'плюс' управляющего напряжения: ");
+                        if (int.TryParse(Console.ReadLine(), out int res))
+                        {
+                            cNode1 = res;
+                            break;
+                        }
+                    }
+                    while (true)
+                    {
+                        Console.Write("Введите номер узла 'минус' управляющего напряжения: ");
+                        if (int.TryParse(Console.ReadLine(), out int res) && res != cNode1)
+                        {
+                            cNode2 = res;
+                            break;
+                        }
+                    }
+                }
+
+
                 var newComponent = new Component
                 {
                     Name = name,
                     Type = type,
                     Value = value,
                     Node1 = node1,
-                    Node2 = node2
+                    Node2 = node2,
+                    ControlNode1 = cNode1,
+                    ControlNode2 = cNode2
                 };
                 components.Add(newComponent);
 

@@ -7,13 +7,16 @@ public class MatrixMParser
     public List<string> RowLabels { get; private set; }
     public List<string> ColumnLabels { get; private set; }
 
+    private List<Component> _treeBranches; 
+
     public MatrixMParser(List<Component> components, List<List<double>> m,
-                        List<string> rowLabels, List<string> columnLabels)
+                        List<string> rowLabels, List<string> columnLabels, List<Component> treeBranches)
     {
         Components = components;
         M = m;
         RowLabels = rowLabels;
         ColumnLabels = columnLabels;
+        _treeBranches = treeBranches;
     }
 
     public (List<List<double>> coefficientMatrix, List<string> variableOrder) Parse()
@@ -33,10 +36,18 @@ public class MatrixMParser
             coefficientMatrix.Add(equation);
         }
 
-        foreach (var resistor in Components.Where(c => c.Type == "R"))
+        foreach (var comp in Components)
         {
-            var equation = CreateOhmLawEquation(resistor, variableOrder);
-            coefficientMatrix.Add(equation);
+            if (comp.Type == "R")
+            {
+                var equation = CreateOhmLawEquation(comp, variableOrder);
+                coefficientMatrix.Add(equation);
+            }
+            else if (comp.Type == "G")
+            {
+                var equation = CreateVCCSEquation(comp, variableOrder);
+                coefficientMatrix.Add(equation);
+            }
         }
 
         return (coefficientMatrix, variableOrder);
@@ -117,4 +128,79 @@ public class MatrixMParser
     {
         return M.Select(row => row[columnIndex]).ToList();
     }
+
+    private List<double> CreateVCCSEquation(Component gComp, List<string> variableOrder)
+    {
+        var equation = new double[variableOrder.Count].ToList();
+        
+        // коэф при токе самого источника  равен 1
+        int currentIndex = variableOrder.IndexOf($"I_{gComp.Name}");
+        equation[currentIndex] = 1.0;
+
+        // заданы управляющие узлы - ищем путь в дереве
+        if (gComp.ControlNode1.HasValue && gComp.ControlNode2.HasValue)
+        {
+            var path = FindPathInTree(gComp.ControlNode1.Value, gComp.ControlNode2.Value);
+            
+            double S = gComp.Value; // крутизна
+            int currentNode = gComp.ControlNode1.Value;
+
+            foreach (var branch in path)
+            {
+                int voltageIndex = variableOrder.IndexOf($"U_{branch.Name}");
+                
+                // если идем по стрелке ветви, то +1, иначе -1
+                double sign = (branch.Node1 == currentNode) ? 1.0 : -1.0;
+                
+                equation[voltageIndex] -= S * sign;
+
+                currentNode = (branch.Node1 == currentNode) ? branch.Node2 : branch.Node1;
+            }
+        }
+        return equation;
+    }
+
+    private List<Component> FindPathInTree(int startNode, int endNode)
+    {
+        // строим граф деерва
+        var adj = new Dictionary<int, List<(int, Component)>>();
+        foreach(var b in _treeBranches) {
+            if(!adj.ContainsKey(b.Node1)) adj[b.Node1] = new List<(int, Component)>();
+            if(!adj.ContainsKey(b.Node2)) adj[b.Node2] = new List<(int, Component)>();
+            adj[b.Node1].Add((b.Node2, b));
+            adj[b.Node2].Add((b.Node1, b));
+        }
+
+        var queue = new Queue<int>();
+        queue.Enqueue(startNode);
+        var cameFrom = new Dictionary<int, (int p, Component b)>();
+        cameFrom[startNode] = (-1, null);
+
+        while(queue.Count > 0) {
+            var curr = queue.Dequeue();
+            if(curr == endNode) break;
+            if (adj.ContainsKey(curr)) {
+                foreach(var edge in adj[curr]) {
+                    if(!cameFrom.ContainsKey(edge.Item1)) {
+                        cameFrom[edge.Item1] = (curr, edge.Item2);
+                        queue.Enqueue(edge.Item1);
+                    }
+                }
+            }
+        }
+
+        if(!cameFrom.ContainsKey(endNode)) return new List<Component>();
+        
+        var path = new List<Component>();
+        var cur = endNode;
+        while(cur != startNode) {
+            var step = cameFrom[cur];
+            path.Add(step.b);
+            cur = step.p;
+        }
+        path.Reverse();
+        return path;
+    }
 }
+        
+    
