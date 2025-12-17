@@ -48,7 +48,7 @@ namespace LabWork
 
             // АНАЛИЗ СХЕМЫ
             Console.WriteLine("\n--- Шаги 4-5: Формирование модели пространства состояний ---");
-            var parser = new MatrixMParser(allComponents, mMatrix, rowLabels, columnLabels, treeBranches);
+            var parser = new MatrixMParser(allComponents, mMatrix, rowLabels, columnLabels);
             var (coefficientMatrix, variableOrder) = parser.Parse();
 
             var analyzer = new CircuitAnalyzer(allComponents, coefficientMatrix, variableOrder);
@@ -79,7 +79,7 @@ namespace LabWork
                     initialConditions[stateVar] = 0;
                 }
             }
-            
+
             Console.WriteLine("\n=== ВЫБОР ВЫХОДНЫХ ПЕРЕМЕННЫХ ДЛЯ НАБЛЮДЕНИЯ ===");
             Console.WriteLine("Доступные переменные для вывода:");
             for (int i = 0; i < variableOrder.Count; i++)
@@ -164,7 +164,7 @@ namespace LabWork
                     string prompt;
                     if (type == "G")
                     {
-                        prompt = $"Введите крутизну S для {name}: ";
+                        prompt = $"Введите S для {name}: ";
                     }
                     else
                     {
@@ -173,6 +173,13 @@ namespace LabWork
                     Console.Write(prompt);
                     if (double.TryParse(Console.ReadLine(), out value)) break;
                     Console.WriteLine("Введите корректное число");
+                }
+                string controlComponentName = "";
+                if (type == "G")
+                {
+                    Console.Write($"Введите название компонента, от которого зависит сила тока на управляемом источнике источнике {name}: ");
+                    controlComponentName = Console.ReadLine();
+                    Console.WriteLine();
                 }
 
                 // 4. Ввод узлов
@@ -217,17 +224,24 @@ namespace LabWork
                     }
                 }
 
-
-                var newComponent = new Component
+                Component newComponent;
+                if (type == "G")
                 {
-                    Name = name,
-                    Type = type,
-                    Value = value,
-                    Node1 = node1,
-                    Node2 = node2,
-                    ControlNode1 = cNode1,
-                    ControlNode2 = cNode2
-                };
+                    newComponent = new ControlledCurrentSource();
+                    ((ControlledCurrentSource) newComponent).ControlComponentName = controlComponentName;
+                } 
+                else
+                {
+                    newComponent = new Component();
+                }
+                newComponent.Name = name;
+                newComponent.Type = type;
+                newComponent.Value = value;
+                newComponent.Node1 = node1;
+                newComponent.Node2 = node2;
+                newComponent.ControlNode1 = cNode1;
+                newComponent.ControlNode2 = cNode2;
+                
                 components.Add(newComponent);
 
                 Console.ForegroundColor = ConsoleColor.Green;
