@@ -4,11 +4,10 @@ namespace LabWork
 {
     public class LabWork
     {
-        const double TimeStep = 0.0001, TotalTime = 0.1;
 
         public static void Main(string[] args)
         {
-            var (components, stateSpaceModel, initialConditions, selectedOutputVars) = SetUp();
+            var (components, stateSpaceModel, initialConditions, selectedOutputVars, timeStep, totalTime) = SetUp();
 
             var solver = new EulerSolver();
 
@@ -16,13 +15,13 @@ namespace LabWork
             var visualizer = new ScottPlotVisualizer(outputDir);
             var visualizationData = new VisualizationData();
 
-            solver.Solve(components, stateSpaceModel, initialConditions, TimeStep, TotalTime, visualizationData);
+            solver.Solve(components, stateSpaceModel, initialConditions, timeStep, totalTime, visualizationData);
 
             visualizer.SaveIndividualGraphs(selectedOutputVars, visualizationData);
             Console.WriteLine($"\nРасчет завершен. Графики сохранены в папку: {Path.GetFullPath(outputDir)}");
         }
 
-        private static (List<Component>, StateSpaceModel, Dictionary<string, double>, List<string>) SetUp()
+        private static (List<Component>, StateSpaceModel, Dictionary<string, double>, List<string>, double, double) SetUp()
         {
             var allComponents = CreateCircuitFromUserInput();
 
@@ -65,8 +64,11 @@ namespace LabWork
                 string line = Console.ReadLine();
                 if (string.IsNullOrWhiteSpace(line))
                 {
-                    if (stateVar == "U_C") initialConditions[stateVar] = 10; // J * R2 = 0.5 * 20 = 10
-                    if (stateVar == "I_L") initialConditions[stateVar] = 0;
+                    // для тестинга
+                    if (stateVar == "U_C") initialConditions[stateVar] = 10; 
+                    else if (stateVar == "I_L") initialConditions[stateVar] = 0;
+                    else initialConditions[stateVar] = 0;
+
                     Console.WriteLine($"Использовано значение по умолчанию: {initialConditions[stateVar]}");
                 }
                 else if (double.TryParse(line, out double value))
@@ -79,7 +81,7 @@ namespace LabWork
                     initialConditions[stateVar] = 0;
                 }
             }
-
+            
             Console.WriteLine("\n=== ВЫБОР ВЫХОДНЫХ ПЕРЕМЕННЫХ ДЛЯ НАБЛЮДЕНИЯ ===");
             Console.WriteLine("Доступные переменные для вывода:");
             for (int i = 0; i < variableOrder.Count; i++)
@@ -106,14 +108,41 @@ namespace LabWork
 
             analyzer.SetOutputVariables(stateSpaceModel, selectedOutputVars);
 
-            return (allComponents, stateSpaceModel, initialConditions, selectedOutputVars);
+            // === ВВОД ПАРАМЕТРОВ ВРЕМЕНИ ===
+            Console.WriteLine("\n=== ПАРАМЕТРЫ МОДЕЛИРОВАНИЯ ===");
+            
+            Console.Write("Введите шаг по времени (по умолчанию 0.0001): ");
+            string timeStepInput = Console.ReadLine();
+            double timeStep = 0.0001;
+            if (!string.IsNullOrWhiteSpace(timeStepInput) && double.TryParse(timeStepInput, out double ts))
+            {
+                timeStep = ts;
+            }
+            else
+            {
+                Console.WriteLine($"Использовано значение по умолчанию: {timeStep}");
+            }
+
+            Console.Write("Введите общее время моделирования (по умолчанию 0.1): ");
+            string totalTimeInput = Console.ReadLine();
+            double totalTime = 0.1;
+            if (!string.IsNullOrWhiteSpace(totalTimeInput) && double.TryParse(totalTimeInput, out double tt))
+            {
+                totalTime = tt;
+            }
+            else
+            {
+                Console.WriteLine($"Использовано значение по умолчанию: {totalTime}");
+            }
+
+            return (allComponents, stateSpaceModel, initialConditions, selectedOutputVars, timeStep, totalTime);
         }
 
         private static List<Component> CreateCircuitFromUserInput()
         {
             Console.Clear();
             Console.WriteLine("=== Конструктор электрической схемы ===");
-            Console.WriteLine("Добавляйте компоненты один за другим. Для завершения введите 'готово'.");
+            Console.WriteLine("Для завершения введите 'готово' или 'x'.");
             Console.WriteLine("Доступные типы компонентов: R, C, L, E (источник ЭДС), J (источник тока).");
             Console.WriteLine("-----------------------------------------");
 
@@ -126,11 +155,22 @@ namespace LabWork
 
                 // 1. Ввод имени
                 string name;
+                bool finishInput = false;
+
                 while (true)
                 {
-                    Console.Write("Введите имя компонента (например, R1, C1): ");
-                    name = Console.ReadLine();
-                    if (name.ToLower() == "готово") break;
+                    Console.Write("Введите имя компонента (например, R1, C1) или 'x' для выхода: ");
+                    string rawInput = Console.ReadLine();
+                    
+                    // сразу проверку на выход
+                    if (rawInput != null && (rawInput.Trim().ToLower() == "готово" || rawInput.Trim().ToLower() == "x"))
+                    {
+                        finishInput = true;
+                        name = "";
+                        break;
+                    }
+
+                    name = rawInput;
 
                     if (string.IsNullOrWhiteSpace(name))
                     {
@@ -144,7 +184,8 @@ namespace LabWork
                     }
                     break;
                 }
-                if (name.ToLower() == "готово") break;
+
+                if (finishInput) break;
 
                 // 2. Ввод типа
                 string type;
@@ -174,10 +215,11 @@ namespace LabWork
                     if (double.TryParse(Console.ReadLine(), out value)) break;
                     Console.WriteLine("Введите корректное число");
                 }
+                
                 string controlComponentName = "";
                 if (type == "G")
                 {
-                    Console.Write($"Введите название компонента, от которого зависит сила тока на управляемом источнике источнике {name}: ");
+                    Console.Write($"Введите название компонента, от которого зависит сила тока на управляемом источнике {name}: ");
                     controlComponentName = Console.ReadLine();
                     Console.WriteLine();
                 }
